@@ -8,7 +8,7 @@ based on https://www.tensorflow.org/tutorials/structured_data/time_series
 """
 
 
-class WindowGenerator():
+class WindowGenerator:
     def __init__(self, input_width, label_width, shift,
                  train_df, val_df, test_df,
                  label_columns=None):

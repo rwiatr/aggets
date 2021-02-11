@@ -32,3 +32,27 @@ def lstm(features, num_layers=1, hidden=64, out_features=1):
             return self.fc(res)
 
     return LSTM_model()
+
+
+def mlp(features, num_layers=1, hidden=64, out_features=1):
+    class ActivationWrapper(nn.Module):
+        def __init__(self, wrapped):
+            super(ActivationWrapper, self).__init__()
+            self.wrapped = wrapped
+            self.activation = nn.ReLU()
+
+        def forward(self, x):
+            x = self.wrapped(x)
+            return self.activation(x)
+
+    if num_layers == 1:
+        return nn.Linear(features, out_features)
+    return nn.Sequential(*(
+            [ActivationWrapper(nn.Linear(features, hidden))] +
+            [ActivationWrapper(nn.Linear(hidden, hidden)) for _ in range(num_layers - 2)] +
+            [nn.Linear(hidden, out_features)]
+    ))
+
+
+def classify(model):
+    return nn.Sequential(model, nn.Sigmoid())

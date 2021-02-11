@@ -3,6 +3,7 @@ import torch.optim as optim
 import torch.nn as nn
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 class FitLoop:
@@ -85,7 +86,7 @@ class EarlyStop:
         self.val_losses.append(validation_loss)
         self.epoch += 1
 
-        if validation_loss < self.best_loss:
+        if validation_loss >= self.best_loss:
             self.failures += 1
             self.is_best_loss = False
         else:
@@ -99,11 +100,20 @@ class EarlyStop:
     def is_stop(self):
         return (self.failures > self.patience) or (self.epoch >= self.max_epochs)
 
-    def plot_loss(self, plot_train_loss=False):
-        plt.plot(self.val_losses)
+    def plot_loss(self, plot_train_loss=False, moving_avg=True):
+        mvn_avg = len(self.val_losses) // 100
+        if moving_avg:
+            plt.plot(pd.Series(self.val_losses).rolling(mvn_avg, center=True).mean(), label='Validation')
+        else:
+            plt.plot(self.val_losses, label='Validation')
         if plot_train_loss:
-            plt.plot(self.train_losses)
-        plt.show()
+            if moving_avg:
+                plt.plot(pd.Series(self.train_losses).rolling(mvn_avg, center=True).mean(), label='Train')
+            else:
+                plt.plot(self.train_losses, label='Train')
+        plt.title('Loss during training')
+        plt.xlabel('epoch')
+        plt.legend()
 
 
 def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_loss=True,
@@ -121,5 +131,24 @@ def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_los
     )
 
     loop.fit(lambda: window.train, lambda: window.val, load_best=False)
+    if plot_loss:
+        stop.plot_loss(plot_train_loss=True)
+
+
+def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True,
+                max_epochs=100, patience=1000, log_every=1000):
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+
+    stop = EarlyStop(patience=patience, max_epochs=max_epochs)
+    loop = FitLoop(
+        stop=stop,
+        net=model,
+        criterion=criterion,
+        optimizer=optimizer,
+        log_every=log_every,
+        path='model.bin'
+    )
+
+    loop.fit(lambda: data.train, lambda: data.val, load_best=False)
     if plot_loss:
         stop.plot_loss(plot_train_loss=True)
