@@ -16,7 +16,7 @@ setup(
     packages=find_packages(where='src'),  # Required
     python_requires='=3.8',
 
-    install_requires=['numpy', 'pandas', 'scikit-learn', 'scikitplot', 'pytorch'],
+    install_requires=['numpy', 'pandas', 'scikit-learn', 'scikit-plot', 'pytorch'],
     # extras_require={
     #     'dev': [],
     #     'test': [],

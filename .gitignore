@@ -3,3 +3,4 @@
 .ipynb_checkpoints
 experiment/data
 experiment/model.bin
+*.bin

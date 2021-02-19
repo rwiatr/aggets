@@ -1,6 +1,6 @@
-import numpy as np
 import torch
 import torch.utils.data as data
+import pandas as pd
 import matplotlib.pyplot as plt
 import scikitplot as skplt
 from sklearn import metrics
@@ -35,7 +35,7 @@ class WindowGenerator:
             f'Label column name(s): {self.label_columns}',
             f'Window count: {self.window_count}'])
 
-    def plot(self, model):
+    def plot(self, model, moving_avg=100):
         train = []
         test = []
         val = []
@@ -47,13 +47,17 @@ class WindowGenerator:
 
         plt.figure(figsize=(12, 8))
         for n, (data_set, label) in enumerate([(train, 'Train'), (test, 'Test'), (val, 'Validation')]):
-            plt.plot(data_set, label=label)
+            if moving_avg:
+                mvn_avg = len(data_set) // moving_avg
+                plt.plot(pd.Series(data_set).rolling(max(mvn_avg, 1), center=True).mean(), label='Validation')
+            else:
+                plt.plot(data_set, label=label)
         plt.legend()
         plt.title('AUC')
         plt.xlabel('window')
         plt.ylabel('AUC')
 
-    def plots(self, models):
+    def plots(self, models, moving_avg=100):
         train = []
         test = []
         val = []
@@ -65,7 +69,11 @@ class WindowGenerator:
 
         plt.figure(figsize=(12, 8))
         for n, (data_set, label) in enumerate([(train, 'Train'), (test, 'Test'), (val, 'Validation')]):
-            plt.plot(data_set, label=label)
+            if moving_avg:
+                mvn_avg = len(data_set) // moving_avg
+                plt.plot(pd.Series(data_set).rolling(max(mvn_avg, 1), center=True).mean(), label='Validation')
+            else:
+                plt.plot(data_set, label=label)
         plt.legend()
         plt.title('AUC')
         plt.xlabel('window')
