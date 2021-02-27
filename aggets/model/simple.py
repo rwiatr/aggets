@@ -88,9 +88,9 @@ def n_conv_1d(features, conv_layers=2, fc_layers=3, conv_width=8, pool_width=4, 
 
 
 def lstm(features, num_layers=1, hidden=64, out_features=1):
-    class LSTMModel(nn.Module):
+    class LSTM_model(nn.Module):
         def __init__(self):
-            super(LSTMModel, self).__init__()
+            super(LSTM_model, self).__init__()
             self.out_features = out_features
             self.lstm = nn.LSTM(input_size=features, hidden_size=hidden,
                                 num_layers=num_layers, batch_first=True)
@@ -100,7 +100,7 @@ def lstm(features, num_layers=1, hidden=64, out_features=1):
             res, _ = self.lstm(x)
             return self.fc(res)
 
-    return LSTMModel()
+    return LSTM_model()
 
 
 def mlp(features, num_layers=1, hidden=64, out_features=1, batch_norm=False, dropout=False):
