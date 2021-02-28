@@ -3,7 +3,6 @@ import torch
 import torch.utils.data as data
 import pandas as pd
 import matplotlib.pyplot as plt
-import scikitplot as skplt
 from sklearn import metrics, linear_model
 import aggets.agge as agge
 import pickle

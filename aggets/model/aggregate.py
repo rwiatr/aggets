@@ -327,3 +327,15 @@ class TransformerModel(nn.Module):
         src = self.decoder(src)
         # print(src.shape)
         return src
+
+
+class SimpleRNN(nn.Module):
+    def __init__(self, lstm_props={}, mlp_props={}):
+        lstm_props['batch_first'] = True
+        self.rnn = nn.LSTM(**lstm_props)
+        self.mlp = simple.mlp(**mlp_props)
+
+    def forward(self, x):
+        x, lr = x
+        last = self.rnn(x)
+        return self.mlp(torch.cat([last, lr], dim=1))

@@ -3,10 +3,10 @@ import pandas as pd
 import torch
 import torch.utils.data as data
 import matplotlib.pyplot as plt
+import itertools
 import aggets.agge as agge
 from sklearn import linear_model
 from sklearn import metrics
-
 from aggets.model.aggregate import LrConv, LrNConv, LrConvOld, TransformerModel
 
 """
@@ -293,6 +293,17 @@ class WindowGenerator:
         for chunk_id in range(skip, chunks):
             yield df[chunk_id * self.chunk_size:(chunk_id + 1) * self.chunk_size]
 
+    def plot_ts(self, axs=None, set_type='test', features=None, rolling=10):
+        agg, _, _ = self.retrieve_set(set_type, 1)
+        features = range(agg.shape[1]) if features is None else features
+        for feature in features:
+            if axs is not None:
+                plt.sca(axs[feature % len(axs)])
+            if rolling is None:
+                plt.plot(agg[:, feature], label=f'feature-{feature}')
+            else:
+                plt.plot(pd.DataFrame(data=agg[:, feature]).rolling(rolling).mean(), label=f'feature-{feature}')
+
     def plot(self, model_data_fn, model=None, model_resid=False, model_name=None,
              set_type='test', plot_box_auc=False, box_mean_dist_from=None,
              lr_t0=True, lr_t1=True, lr0=True, last_train=True, no_lr=False, lr_tn=None,
@@ -300,7 +311,6 @@ class WindowGenerator:
         window = self
         ax_id = 0
         if axs is not None:
-            plt.sca(axs[ax_id])
             ax_id += 1
         lr = linear_model.LogisticRegression().fit(self.train_df[self.value_columns][:2], [0, 1])
         result_auc = {}
@@ -328,13 +338,7 @@ class WindowGenerator:
 
         lr.init_regression = init_regression
         lr.measure = measure_lr
-        sets = {'train': (self.train_lr[:int(self.train_lr.shape[0] * train), 0, :],
-                          self.train_df[:int(self.train_df.shape[0] * train)],
-                          self.train_agges[:int(self.train_agges.shape[0] * train), 0, :],
-                          self.train_lr[:int(self.train_lr.shape[0] * train)]),
-                'val': (self.val_lr[:, 0, :], self.val_df, self.val_agges[:, 0, :], self.val_lr),
-                'test': (self.test_lr[:, 0, :], self.test_df, self.test_agges[:, 0, :], self.test_lr)}
-        lrs, df, agg, lrs_full = sets[set_type]
+        agg, df, lrs = self.retrieve_set(set_type, train)
 
         if not no_lr:
             if lr_t0:
@@ -481,3 +485,15 @@ class WindowGenerator:
             plt.xticks(range(1, len(names) + 1), names, rotation=90)
 
         return result_auc
+
+    def retrieve_set(self, set_type, train):
+        sets = {'train': (self.train_lr[:int(self.train_lr.shape[0] * train), 0, :],
+                          self.train_df[:int(self.train_df.shape[0] * train)],
+                          self.train_agges[:int(self.train_agges.shape[0] * train), 0, :],
+                          self.train_lr[:int(self.train_lr.shape[0] * train)]),
+                'val': (self.val_lr[:, 0, :], self.val_df, self.val_agges[:, 0, :], self.val_lr),
+                'test': (self.test_lr[:, 0, :], self.test_df, self.test_agges[:, 0, :], self.test_lr)}
+
+        lrs, df, agg, lrs_full = sets[set_type]
+
+        return agg, df, lrs
