@@ -6,10 +6,18 @@ import torch.nn as nn
 from aggets.model import simple
 
 
+class WindowConfig:
+    def __init__(self, output_sequence_length=None, input_sequence_length=None, label_stride=1):
+        self.output_sequence_length = output_sequence_length
+        self.input_sequence_length = input_sequence_length
+        self.label_stride = label_stride
+
+
 class DummyNet(nn.Module):
     def __init__(self):
         super(DummyNet, self).__init__()
         self.mlp = simple.mlp(1)
+        self.window_config = WindowConfig()
 
     def forward(self, x):
         x, lr = x
@@ -20,11 +28,12 @@ class LrConvOld(nn.Module):
     def __init__(self, conv_features, conv_width, lr_features, conv_hidden=32, mlp_layers=3):
         super(LrConvOld, self).__init__()
         self.conv_width = conv_width
+        self.window_config = WindowConfig(input_sequence_length=conv_width, output_sequence_length=1)
+
         self.conv = nn.Sequential(simple.conv_1d(conv_width=conv_width,
                                                  features=conv_features,
                                                  hidden=conv_hidden,
-                                                 out_features=conv_hidden),
-                                  nn.ReLU())
+                                                 out_features=conv_hidden))
         self.mlp = simple.mlp(features=lr_features + conv_hidden,
                               num_layers=mlp_layers,
                               hidden=lr_features + conv_hidden,
@@ -52,6 +61,7 @@ class LrConv(nn.Module):
                  resid=True):
         super(LrConv, self).__init__()
         self.conv_width = conv_width
+        self.window_config = WindowConfig(input_sequence_length=conv_width, output_sequence_length=1)
         self.resid = resid
         self.conv, conv_seq_reduction = simple.n_conv_1d(features=conv_features,
                                                          conv_width=conv_width,
@@ -79,16 +89,95 @@ class LrConv(nn.Module):
             return x
 
 
-"""
-CREATE CONTINUOUS QUERY "transactions"
-ON "orders"
-BEGIN
-  SELECT mean(value) as value,
-  INTO "downsampled.cpu_load"
-  FROM cpu_load
-  GROUP BY time(1h), type, order_id
-END
-"""
+class LstmLr(nn.Module):
+    def __init__(self, ts_features, lr_features, num_layers=1, hidden=64):
+        super(LstmLr, self).__init__()
+        self.window_config = WindowConfig(output_sequence_length=1)
+
+        hidden_shape = (ts_features + lr_features) if hidden is None else hidden
+        self.lstm = simple.lstm(features=ts_features + lr_features,
+                                hidden=hidden_shape,
+                                out_features=lr_features,
+                                num_layers=num_layers)
+
+    def forward(self, x):
+        ts, lr = x
+        x = torch.cat([ts, lr], dim=2)
+        x = self.lstm(x) + lr[:, -1:, :]
+        return x
+
+
+class AutoregLstmLr(nn.Module):
+    def __init__(self, ts_features, lr_features, num_layers=1, hidden=64, output_sequence_length=1,
+                 return_deltas=False):
+        super(AutoregLstmLr, self).__init__()
+        self.window_config = WindowConfig(output_sequence_length=output_sequence_length)
+        self.return_deltas = return_deltas
+        hidden_shape = (ts_features + lr_features) if hidden is None else hidden
+        self.enc = nn.LSTM(input_size=ts_features + lr_features,
+                           hidden_size=hidden_shape,
+                           num_layers=num_layers, batch_first=True)
+        self.dec = nn.LSTM(input_size=hidden_shape,
+                           hidden_size=hidden_shape,
+                           num_layers=num_layers, batch_first=True)
+        self.to_lr = simple.mlp(features=hidden_shape, out_features=lr_features)
+
+    def decode(self, enc, lr):
+        for _ in range(self.window_config.output_sequence_length):
+            enc, _ = self.dec(enc)
+            delta = self.to_lr(enc)
+            lr = delta + lr
+            yield lr, delta
+
+    def forward(self, x):
+        _, lr = x
+        x = torch.cat(x, dim=2)
+        x = self.encode(x)
+        x = self.decode(x, lr[:, -1:, :])
+
+        lrs = []
+        deltas = []
+        for lr, delta in x:
+            lrs.append(lr)
+            deltas.append(delta)
+
+        if not self.return_deltas:
+            return torch.cat(lrs, dim=1)
+        return torch.cat(lrs, dim=1), torch.cat(deltas, dim=1)
+
+    def encode(self, x):
+        enc, _ = self.enc(x)
+        return enc[:, -1:, ]
+
+
+class AutoregLstm(nn.Module):
+    def __init__(self, ts_features, num_layers=1, hidden=64, output_sequence_length=1):
+        super(AutoregLstm, self).__init__()
+        self.window_config = WindowConfig(output_sequence_length=output_sequence_length)
+        hidden_shape = ts_features if hidden is None else hidden
+        self.enc = nn.LSTM(input_size=ts_features,
+                           hidden_size=hidden_shape,
+                           num_layers=num_layers, batch_first=True)
+        self.dec = nn.LSTM(input_size=hidden_shape,
+                           hidden_size=hidden_shape,
+                           num_layers=num_layers, batch_first=True)
+        self.to_result = simple.mlp(features=hidden_shape, out_features=ts_features)
+
+    def decode(self, enc):
+        for _ in range(self.window_config.output_sequence_length):
+            enc, _ = self.dec(enc)
+            yield self.to_result(enc)
+
+    def forward(self, x):
+        x, _ = x
+        x = self.encode(x)
+        x = self.decode(x)
+
+        return torch.cat(list(x), dim=1)
+
+    def encode(self, x):
+        enc, _ = self.enc(x)
+        return enc[:, -1:, ]
 
 
 class LrNConv(nn.Module):
@@ -108,6 +197,8 @@ class LrNConv(nn.Module):
                  out_features=1):
         super(LrNConv, self).__init__()
         self.conv_width = conv_width
+        self.window_config = WindowConfig(input_sequence_length=conv_width, output_sequence_length=1)
+
         self.conv_ts = simple.n_conv_1d(features=ts_features,
                                         conv_layers=conv_layers,
                                         pool_width=ts_conv_pool_width,
@@ -159,6 +250,7 @@ class CombinedLrNConv(nn.Module):
         super(CombinedLrNConv, self).__init__()
         arg_map = {} if arg_map is None else arg_map
         self.conv_width = conv_width
+        self.window_config = WindowConfig(input_sequence_length=conv_width, output_sequence_length=1)
         self.conv = simple.n_conv_1d(features=ts_features + lr_features,
                                      conv_layers=conv_layers,
                                      pool_width=conv_pool_width,
@@ -192,6 +284,8 @@ class CombinedLrNConvWithRawLr(nn.Module):
         mlp_arg_map = {} if mlp_arg_map is None else mlp_arg_map
 
         self.conv_width = conv_width
+        self.window_config = WindowConfig(input_sequence_length=conv_width, output_sequence_length=1)
+
         self.conv = simple.n_conv_1d(features=ts_features + lr_features,
                                      conv_layers=conv_layers,
                                      pool_width=conv_pool_width,

@@ -98,7 +98,7 @@ def lstm(features, num_layers=1, hidden=64, out_features=1):
 
         def forward(self, x):
             res, _ = self.lstm(x)
-            return self.fc(res)
+            return self.fc(res[:, -1:, ])
 
     return LSTM_model()
 
