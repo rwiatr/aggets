@@ -29,11 +29,10 @@ class LrConvOld(nn.Module):
         super(LrConvOld, self).__init__()
         self.conv_width = conv_width
         self.window_config = WindowConfig(input_sequence_length=conv_width, output_sequence_length=1)
-
-        self.conv = nn.Sequential(simple.conv_1d(conv_width=conv_width,
-                                                 features=conv_features,
-                                                 hidden=conv_hidden,
-                                                 out_features=conv_hidden))
+        self.conv = simple.conv_1d(conv_width=conv_width,
+                                   features=conv_features,
+                                   hidden=conv_hidden,
+                                   out_features=conv_hidden)
         self.mlp = simple.mlp(features=lr_features + conv_hidden,
                               num_layers=mlp_layers,
                               hidden=lr_features + conv_hidden,
@@ -41,10 +40,14 @@ class LrConvOld(nn.Module):
 
     def forward(self, x):
         x, lr = x
+        # batch, seq, features
         lr = lr[:, self.conv_width - 1:, :]
         x = self.conv(x)
         cat = torch.cat([x, lr], dim=2)
-        x = self.mlp(cat)
+        # x = [32, 1, 204]
+        # lr = [32, 1, 11]
+        # cat = [32, 1, 215]
+        x = self.mlp(cat)  # delta between last regression and next one
         return lr + x
 
 
@@ -128,6 +131,67 @@ class AutoregLstmLr(nn.Module):
             delta = self.to_lr(enc)
             lr = delta + lr
             yield lr, delta
+
+    def forward(self, x):
+        _, lr = x
+        x = torch.cat(x, dim=2)
+        x = self.encode(x)
+        x = self.decode(x, lr[:, -1:, :])
+
+        lrs = []
+        deltas = []
+        for lr, delta in x:
+            lrs.append(lr)
+            deltas.append(delta)
+
+        if not self.return_deltas:
+            return torch.cat(lrs, dim=1)
+        return torch.cat(lrs, dim=1), torch.cat(deltas, dim=1)
+
+    def encode(self, x):
+        enc, _ = self.enc(x)
+        return enc[:, -1:, :]
+
+
+class AutoregLstmLrAux(nn.Module):
+    def __init__(self, ts_features, lr_features, num_layers=1, hidden=64, output_sequence_length=1,
+                 return_deltas=False, single_output=False, ret_type='all'):
+        super(AutoregLstmLrAux, self).__init__()
+        self.window_config = WindowConfig(output_sequence_length=output_sequence_length)
+        self.return_deltas = return_deltas
+        hidden_shape = (ts_features + lr_features) if hidden is None else hidden
+        self.enc = nn.LSTM(input_size=ts_features + lr_features,
+                           hidden_size=hidden_shape,
+                           num_layers=num_layers, batch_first=True)
+        self.dec = nn.LSTM(input_size=hidden_shape,
+                           hidden_size=hidden_shape,
+                           num_layers=num_layers, batch_first=True)
+        self.single_output = single_output
+        if single_output:
+            self.to_delta_aux = simple.mlp(features=hidden_shape, out_features=lr_features + ts_features)
+        else:
+            self.to_aux = simple.mlp(features=hidden_shape, out_features=ts_features)
+            self.to_delta = simple.mlp(features=hidden_shape, out_features=lr_features)
+        self.lr_features = lr_features
+        self.ret_type = ret_type
+
+    def decode(self, enc, lr):
+        for _ in range(self.window_config.output_sequence_length):
+            enc, _ = self.dec(enc)
+            if self.single_output:
+                delta_aux = self.to_delta_aux(enc)
+                delta = delta_aux[:, :, :self.lr_features]
+                aux = delta_aux[:, :, self.lr_features:]
+            else:
+                aux = self.to_aux(enc)
+                delta = self.to_delta(enc)
+            lr = delta + lr
+            if self.ret_type == 'lr':
+                yield lr, delta
+            elif self.ret_type == 'aux':
+                yield aux, delta
+            else:
+                yield torch.cat([aux, lr], dim=-1), delta
 
     def forward(self, x):
         _, lr = x

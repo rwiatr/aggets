@@ -33,7 +33,7 @@ class WindowGenerator:
                  df=None, samples=32, sample_frac=1.0, shuffle_reg=False, bin_count=1,
                  discretization=10, shuffle_input=False, shuffle_output=False, reverse_train=False,
                  double_target=True, density=True, one_row_ts=True, debug_output=False, mark_type=False,
-                 train_histograms=False):
+                 train_histograms=False, train_histograms_and_regressions=False):
         self.train_df = train_df
         self.val_df = val_df
         self.test_df = test_df
@@ -48,6 +48,7 @@ class WindowGenerator:
         self.debug_output = debug_output
         self.mark_type = mark_type
         self.train_histograms = train_histograms
+        self.train_histograms_and_regressions = train_histograms_and_regressions
 
         self.shuffle_reg = shuffle_reg
         self.chunk_size = chunk_size
@@ -191,10 +192,12 @@ class WindowGenerator:
 
             if self.train_histograms:
                 target = target[:, :, :p_size]
+            elif self.train_histograms_and_regressions:
+                target = torch.cat([target[:, :, :p_size], target[:, :, agg_size:agg_size + lr_size]], dim=-1)
             else:
                 target = target[:, :, agg_size:agg_size + lr_size]
 
-            if self.debug_output:
+            if self.debug_output and False:
                 print(f'--- p {aggregates_p.shape}')
                 for i in range(3):
                     print(aggregates_p[i, :, 0])
@@ -214,9 +217,10 @@ class WindowGenerator:
                     aggregates = torch.stack([aggregates_p, aggregates_d], dim=-2)
             else:
                 aggregates = aggregates_p
-            if self.debug_output:
+            if self.debug_output and False:
                 print(f'p={aggregates_p.shape}, d={aggregates_d.shape}, res={aggregates.shape}, '
                       f's={source.shape}, t={target.shape}')
+
             return (aggregates, source), target
 
         return __split_window
@@ -369,48 +373,66 @@ class WindowGenerator:
         return animation.FuncAnimation(plt.gcf(), animate, frames=(agg.shape[0] - 1) * anim_frames,
                                        interval=20, blit=True)
 
-    def plot_hist_dist(self, model=None, set_type='test', loss=F.mse_loss, rolling=100, axs=None):
+    def plot_hist(self, model=None, set_type='test', rolling=100, axs=None, compare_to=None):
         ax_id = 0
-        agg, lr = self.retrieve_aggregates(set_type, 1.0)
-        dataset, _, _ = self.to_dataset(agg=agg, lrs=lr,
-                                        in_len=self.input_sequence_length,
-                                        out_len=self.output_sequence_length,
-                                        with_reverse=False)
-        split = self.split_window(lr_size=lr.shape[-1], agg_size=agg.shape[-1],
-                                  in_len=self.input_sequence_length,
-                                  out_len=self.output_sequence_length,
-                                  return_density=self.density,
-                                  single_ts=self.density,
-                                  double_target=self.double_target)
-
-        def measure_model(model, attempts):
-            """ agg = [time, type, vals]"""
-            result = np.zeros([attempts, len(dataset) // attempts])
-            data = [] # attempt, idx
-            for row in dataset:
-                total_batch.append(row)
-
-            for idx, row in enumerate(dataset):
-                print(torch.stack([row], dim=0).shape)
-                source, target = split(torch.stack([row], dim=0))
-                result[idx % attempts, idx // attempts] = loss(model(source), target).item()
-
-            return pd.DataFrame(data=result.mean(axis=0)).rolling(rolling).mean()
-
-        # if tn is not None:
-        #     tn = [tn] if not isinstance(tn, list) else tn
-        #     for delta in tn:
-        #         measure_tn(tn)
         if axs is not None:
             plt.sca(axs[ax_id])
             ax_id += 1
 
-        if model is not None:
-            models = [model] if not isinstance(model, list) else model
+        compare_to = [] if compare_to is None else compare_to
 
-            for model in models:
-                mloss = measure_model(model, self.train_lr.shape[0])
-                plt.plot(mloss.rolling(rolling).mean(), label=model.name)
+        agg, lr = self.retrieve_aggregates(set_type, 1.0)
+
+        for k in compare_to:
+            diff = (agg[k:] - agg[:-k])[:, :, 0, :] ** 2
+            mean_diff = diff.mean(dim=[1, 2])
+            df = pd.DataFrame(index=range(k, agg.shape[0]), data=mean_diff).rolling(rolling).mean()
+
+            plt.plot(df, label=f'H[{k}]')
+
+        loader = self.data_loader(agg=agg, lrs=lr, shuffle=False, batch_size=self.samples)
+
+        models = [model] if not isinstance(model, list) else model
+        for idx, model in enumerate(models):
+            result = []
+            for _, d in enumerate(loader):
+                X, y = d
+                diff = (model(X) - y) ** 2
+                result.append(diff.mean())
+            name = model.name
+            df = pd.DataFrame(data=result).rolling(rolling).mean()
+
+            plt.plot(df, label=f'{name}')
+
+        plt.legend()
+        # def measure_model(model, attempts):
+        #     """ agg = [time, type, vals]"""
+        #     result = np.zeros([attempts, len(dataset) // attempts])
+        #     data = [] # attempt, idx
+        #     for row in dataset:
+        #         total_batch.append(row)
+        #
+        #     for idx, row in enumerate(dataset):
+        #         print(torch.stack([row], dim=0).shape)
+        #         source, target = split(torch.stack([row], dim=0))
+        #         result[idx % attempts, idx // attempts] = loss(model(source), target).item()
+        #
+        #     return pd.DataFrame(data=result.mean(axis=0)).rolling(rolling).mean()
+        #
+        # # if tn is not None:
+        # #     tn = [tn] if not isinstance(tn, list) else tn
+        # #     for delta in tn:
+        # #         measure_tn(tn)
+        # if axs is not None:
+        #     plt.sca(axs[ax_id])
+        #     ax_id += 1
+        #
+        # if model is not None:
+        #     models = [model] if not isinstance(model, list) else model
+        #
+        #     for model in models:
+        #         mloss = measure_model(model, self.train_lr.shape[0])
+        #         plt.plot(mloss.rolling(rolling).mean(), label=model.name)
 
     def plot(self, model_data_fn, model=None, model_resid=False, model_name=None,
              set_type='test', plot_box_auc=False, box_mean_dist_from=None,
@@ -478,7 +500,8 @@ class WindowGenerator:
                 model_aucs = []
                 index = []
                 for idx, dat, df in data_set:
-                    lr_hat = model.forward(dat).detach().numpy().reshape(-1)
+                    result = model.forward(dat)
+                    lr_hat = result.detach().numpy().reshape(-1)
                     if model_resid:
                         lr_hat = lr_hat + dat[1][:, -1].detach().numpy().reshape(-1)
                     lr.coef_ = lr_hat[:-1].reshape(1, -1)
@@ -506,10 +529,11 @@ class WindowGenerator:
                                 aggregates = aggregates.reshape(aggregates.shape[0], -1)
                             elif not self.density and not self.density_encoded:
                                 aggregates = aggregates
+                            elif not self.density and self.density_encoded:
+                                aggregates = data_set_agg[k:k + input_length, 0]
                             else:
                                 raise Exception('illegal state')
                             lr_v = data_set_lr[k:k + input_length, :]
-
                             yield aggregates.reshape(1, *aggregates.shape), lr_v.reshape(1, *lr_v.shape)
 
                     model_data_fn = prepare_model_input

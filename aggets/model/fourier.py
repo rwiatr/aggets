@@ -112,7 +112,7 @@ class HistogramEncoder:
         input = [batch, size, hist_id, hist_type, t_in]
         output = [batch * hist_id * hist_type, size, t_in + (pos, id, type)]
         """
-
+        print(x.shape)
         # flatten dims
         x = torch.cat([x[:, :, h] for h in range(x.shape[2])])
         x = torch.cat([x[:, :, h] for h in range(x.shape[2])])
@@ -161,6 +161,7 @@ class HistogramLerner(nn.Module):
         self.multi_block = MultiHistogramBlock(3, 64, 4, self.encoder.t_out)
 
     def forward(self, x):
+        x, _ = x
         x = self.encoder.encode(x)
         x = self.multi_block(x)
         x = self.encoder.decode(x)
@@ -190,4 +191,4 @@ class FAdapter(nn.Module):
 
     def forward(self, X):
         ts, lr = X
-        self.learner(ts)
+        return self.learner(ts)
