@@ -7,7 +7,6 @@ import matplotlib.animation as animation
 import aggets.agge as agge
 from sklearn import linear_model
 from sklearn import metrics
-import torch.nn.functional as F
 
 """
 based on https://www.tensorflow.org/tutorials/structured_data/time_series
@@ -16,7 +15,10 @@ import multiprocessing as mp
 
 
 def make_aggregate(X, y, column_ordering, sample_frac, bin_count):
-    X = X.sample(frac=sample_frac, replace=True)
+    sampling = np.random.randint(X.shape[0], size=int(X.shape[0] * sample_frac + 1))
+    X = X.iloc[sampling, :]
+    y = y.iloc[sampling, :]
+
     if X.shape[0] == 0:
         return None
     encoder = agge.AggregateEncoder()
@@ -33,7 +35,7 @@ class WindowGenerator:
                  df=None, samples=32, sample_frac=1.0, shuffle_reg=False, bin_count=1,
                  discretization=10, shuffle_input=False, shuffle_output=False, reverse_train=False,
                  double_target=True, density=True, one_row_ts=True, debug_output=False, mark_type=False,
-                 train_histograms=False, train_histograms_and_regressions=False):
+                 train_histograms=False, train_histograms_and_regressions=False, output_offset=0):
         self.train_df = train_df
         self.val_df = val_df
         self.test_df = test_df
@@ -49,6 +51,7 @@ class WindowGenerator:
         self.mark_type = mark_type
         self.train_histograms = train_histograms
         self.train_histograms_and_regressions = train_histograms_and_regressions
+        self.output_offset = output_offset
 
         self.shuffle_reg = shuffle_reg
         self.chunk_size = chunk_size
@@ -114,7 +117,7 @@ class WindowGenerator:
         self.discretization = other.discretization
 
         # self.shuffle_reg = other.shuffle_reg
-        self.chunk_size = other.chunk_size
+        self.chunk_size = other.window_size
         self.samples = other.samples
         self.sample_frac = other.sample_frac
         self.bin_count = other.bin_count
@@ -132,7 +135,7 @@ class WindowGenerator:
         self.value_column_count = other.value_column_count
         self.unique_values = other.unique_values
         self.train_agges = other.train_agges
-        self.train_lr = other.train_lr
+        self.train_lr = other.train_model
         self.test_agges = other.test_agges
         self.test_lr = other.test_lr
         self.val_agges = other.val_agges
@@ -234,7 +237,7 @@ class WindowGenerator:
             def __getitem__(self, i): return self.array[i]
 
         data_len = max(in_len, out_len)
-        out_start = min(in_len, out_len)
+        out_start = min(in_len, out_len) + self.output_offset
         buffer_size = in_len + out_len
         attempts = blob.shape[0]
         time = blob.shape[1]
@@ -400,7 +403,9 @@ class WindowGenerator:
                 diff = (model(X) - y) ** 2
                 result.append(diff.mean())
             name = model.name
-            df = pd.DataFrame(data=result).rolling(rolling).mean()
+            sequence_length = model.window_config.input_sequence_length
+            df = pd.DataFrame(data=result,
+                              index=range(sequence_length, sequence_length + len(result))).rolling(rolling).mean()
 
             plt.plot(df, label=f'{name}')
 

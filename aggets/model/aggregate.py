@@ -12,6 +12,16 @@ class WindowConfig:
         self.input_sequence_length = input_sequence_length
         self.label_stride = label_stride
 
+    def with_in_seq(self, input_sequence_length):
+        return WindowConfig(output_sequence_length=self.output_sequence_length,
+                            input_sequence_length=input_sequence_length,
+                            label_stride=self.label_stride)
+
+    def with_stride(self, label_stride):
+        return WindowConfig(output_sequence_length=self.output_sequence_length,
+                            input_sequence_length=self.input_sequence_length,
+                            label_stride=label_stride)
+
 
 class DummyNet(nn.Module):
     def __init__(self):
@@ -21,7 +31,19 @@ class DummyNet(nn.Module):
 
     def forward(self, x):
         x, lr = x
-        return lr[-1]
+        return lr[:, -1]
+
+
+class DummyNetTS(nn.Module):
+    def __init__(self, dist):
+        super(DummyNetTS, self).__init__()
+        self.mlp = simple.mlp(1)
+        self.window_config = WindowConfig()
+        self.dist = dist
+
+    def forward(self, x):
+        x, lr = x
+        return x[:, self.dist]
 
 
 class LrConvOld(nn.Module):

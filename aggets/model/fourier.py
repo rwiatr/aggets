@@ -38,11 +38,9 @@ class Fop1d(nn.Module):
         batchsize = x.shape[0]
         # Compute Fourier coeffcients up to factor of e^(- something constant)
         x_ft = torch.rfft(x, 1, normalized=True, onesided=True)
-
         # Multiply relevant Fourier modes
         out_ft = torch.zeros(batchsize, self.in_channels, x.size(-1) // 2 + 1, 2, device=x.device)
         out_ft[:, :, :self.modes1] = compl_mul1d(x_ft[:, :, :self.modes1], self.weights1)
-
         # Return to physical space
         x = torch.irfft(out_ft, 1, normalized=True, onesided=True, signal_sizes=(x.size(-1),))
         return x
@@ -112,12 +110,12 @@ class HistogramEncoder:
         input = [batch, size, hist_id, hist_type, t_in]
         output = [batch * hist_id * hist_type, size, t_in + (pos, id, type)]
         """
-        print(x.shape)
         # flatten dims
+        # print(x.shape)
         x = torch.cat([x[:, :, h] for h in range(x.shape[2])])
         x = torch.cat([x[:, :, h] for h in range(x.shape[2])])
-
         batch = x.shape[0]
+        # print(x.shape, self.size, self.t_in)
         # add position information, histogram_id information and histogram type information
         x = torch.cat([x.reshape(batch, self.size, self.t_in), self.grid.repeat(batch, 1, 1)], dim=-1)
         x = torch.cat([x.reshape(batch, self.size, self.t_in + 1),
@@ -125,7 +123,6 @@ class HistogramEncoder:
         x = torch.cat([x.reshape(batch, self.size, self.t_in + 2),
                        self.type_id.repeat_interleave(batch // self.types * self.size).reshape(batch, self.size, 1)],
                       dim=-1)
-
         return x
 
     def decode(self, x):
@@ -161,10 +158,14 @@ class HistogramLerner(nn.Module):
         self.multi_block = MultiHistogramBlock(3, 64, 4, self.encoder.t_out)
 
     def forward(self, x):
-        x, _ = x
+        # x, _ = x
+        # print('0) x =', x.shape)
         x = self.encoder.encode(x)
+        # print('1) x =', x.shape)
         x = self.multi_block(x)
+        # print('2) x =', x.shape)
         x = self.encoder.decode(x)
+        # print('3) x =', x.shape)
         return x
 
 
@@ -191,4 +192,42 @@ class FAdapter(nn.Module):
 
     def forward(self, X):
         ts, lr = X
-        return self.learner(ts)
+
+        """
+        ts = [batch, seq, feature]
+        lerner:
+        input = [batch, size, hist_id, hist_type, t_in]
+        output = [batch * hist_id * hist_type, size, t_in + (pos, id, type)]
+        """
+        # print(ts.shape)
+        ts = torch.transpose(ts, 1, 2)
+        ts = torch.unsqueeze(ts, 2)
+        ts = torch.unsqueeze(ts, 2)
+        ts = self.learner(ts)
+        ts = torch.transpose(ts, 1, 2)
+        ts = ts[:, :, :, 0, 0]
+        # print(ts.shape)
+        return ts
+
+
+class FAdapter2(nn.Module):
+    def __init__(self, learner):
+        super(FAdapter2, self).__init__()
+        self.learner = learner
+
+    def forward(self, X):
+        ts = X
+
+        """
+        ts = [batch, seq, hist_id, hist_type, features]
+        lerner:
+        input = [batch, size, hist_id, hist_type, t_in]
+        output = [batch * hist_id * hist_type, size, t_in + (pos, id, type)]
+        """
+        # print(ts.shape)
+        ts = torch.transpose(ts, 1, -1)
+        ts = self.learner(ts)
+        ts = torch.transpose(ts, 1, -1)
+        # ts = ts[:, :, :, 0, 0]
+        # print(ts.shape)
+        return ts

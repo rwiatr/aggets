@@ -127,7 +127,7 @@ def mlp(features, num_layers=1, hidden=64, out_features=1, batch_norm=False, dro
         if dropout:
             layers.append(nn.Dropout())
 
-    layers.append(nn.Linear(features, out_features))
+    layers.append(nn.Linear(hidden, out_features))
 
     return nn.Sequential(*layers)
 

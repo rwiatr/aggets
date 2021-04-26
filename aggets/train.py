@@ -7,12 +7,13 @@ import pandas as pd
 
 
 class FitLoop:
-    def __init__(self, stop, criterion, net, optimizer, log_every=100):
+    def __init__(self, stop, criterion, net, optimizer, log_every=100, log=True):
         self.stop = stop
         self.criterion = criterion
         self.net = net
         self.optimizer = optimizer
         self.log_every = log_every
+        self.log = log
 
     def fit(self, train_loader, validation_loader=None, optimize=True):
         if validation_loader is None:
@@ -28,7 +29,6 @@ class FitLoop:
                 outputs = self.net(X)
                 if optimize:
                     self.optimizer.zero_grad()
-
                 loss = self.criterion(outputs, y)
 
                 if optimize:
@@ -38,16 +38,17 @@ class FitLoop:
                 train_losses.append(loss.item())
 
                 if ((batch_num + 1) % self.log_every) == 0:
-                    print('{}epoch {} batch {} loss={:.3}, '
-                          'MTL={:.3}, '
-                          'MVL={:.3}'
-                          '\t\t\t\t\r'
-                          .format('*' if self.stop.is_best() else '',
-                                  self.stop.epoch,
-                                  batch_num + 1,
-                                  loss.item(),
-                                  np.mean(np.abs(train_losses)),
-                                  np.mean(np.abs(val_losses))))
+                    if self.log:
+                        print('{}epoch {} batch {} loss={:.3}, '
+                              'MTL={:.3}, '
+                              'MVL={:.3}'
+                              '\t\t\t\t\r'
+                              .format('*' if self.stop.is_best() else '',
+                                      self.stop.epoch,
+                                      batch_num + 1,
+                                      loss.item(),
+                                      np.mean(np.abs(train_losses)),
+                                      np.mean(np.abs(val_losses))))
                 batch_num += 1
 
             val_losses = self.validate(validation_loader)
@@ -157,7 +158,7 @@ class ModelHandler:
 
 def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
                        max_epochs=100, patience=1000, log_every=1000, weight_decay=0, path='model.bin', validate=True,
-                       train_loss_mul=1, optimize=True):
+                       train_loss_mul=1, optimize=True, log=True):
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
@@ -166,11 +167,12 @@ def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_los
         net=model,
         criterion=criterion,
         optimizer=optimizer,
-        log_every=log_every
+        log_every=log_every,
+        log=log
     )
 
     loop.fit(lambda: window.train, (lambda: window.val) if validate else None, optimize=optimize)
-    if plot_loss:
+    if plot_loss and log:
         stop.plot_loss(plot_train_loss=True, train_loss_mul=train_loss_mul)
 
     return handler
@@ -198,7 +200,7 @@ def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, m
 
 
 def train_lr_decay(model, window, handler=None, criterion=None, patience=5, validate=True,
-                   lrs=[0.001, 0.0001, 0.00001], weight_decay=0, max_epochs=100):
+                   lrs=[0.001, 0.0001, 0.00001], weight_decay=0, max_epochs=100, log=True):
     handler = None or handler
     for lr in lrs:
         if handler:
@@ -208,12 +210,12 @@ def train_lr_decay(model, window, handler=None, criterion=None, patience=5, vali
             handler = train_window_model(model, window, log_every=200, max_epochs=max_epochs,
                                          patience=patience, validate=validate,
                                          lr=lr, model_handler=handler, optimize=model.name != 'DUMMY',
-                                         weight_decay=weight_decay)
+                                         weight_decay=weight_decay, log=log)
         else:
             handler = train_window_model(model, window, log_every=200, max_epochs=max_epochs, criterion=criterion,
                                          patience=patience, validate=validate,
                                          lr=lr, model_handler=handler, optimize=model.name != 'DUMMY',
-                                         weight_decay=weight_decay)
+                                         weight_decay=weight_decay, log=log)
 
         plt.show()
 
@@ -221,10 +223,15 @@ def train_lr_decay(model, window, handler=None, criterion=None, patience=5, vali
 
 
 def train_window_models(models, wg, criterion=None, patience=5, validate=True, lrs=[0.001, 0.0001, 0.00001],
-                        weight_decay=0, max_epochs=100):
+                        weight_decay=0, max_epochs=100, target='lr', source='all', log='full'):
+    original = wg
     for model in models:
-        wg.configure(model.window_config)
+        if hasattr(wg, 'configure'):
+            wg = original
+            wg.configure(model.window_config)
+        else:
+            wg = original.wrapped(model.window_config, {'target': target, 'source': source})
         print(f'training model {model.name}')
         handler = train_lr_decay(model, wg, criterion=criterion, patience=patience, validate=validate, lrs=lrs,
-                                 weight_decay=weight_decay, max_epochs=max_epochs)
+                                 weight_decay=weight_decay, max_epochs=max_epochs, log=log)
         handler.best()
