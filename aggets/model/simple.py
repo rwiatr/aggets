@@ -103,7 +103,7 @@ def lstm(features, num_layers=1, hidden=64, out_features=1):
     return LSTM_model()
 
 
-def mlp(features, num_layers=1, hidden=64, out_features=1, batch_norm=False, dropout=False):
+def mlp(features, num_layers=1, hidden=64, out_features=1, batch_norm=False, dropout=None, input_dropout=None):
     class ActivationWrapper(nn.Module):
         def __init__(self, wrapped):
             super(ActivationWrapper, self).__init__()
@@ -117,15 +117,20 @@ def mlp(features, num_layers=1, hidden=64, out_features=1, batch_norm=False, dro
     if num_layers == 1:
         return nn.Linear(features, out_features)
 
-    layers = [nn.Linear(features, hidden), nn.ReLU()]
-    if dropout:
-        layers.append(nn.Dropout())
+    layers = [nn.Linear(features, hidden)]
+    if batch_norm:
+        layers.append(nn.BatchNorm1d(hidden))
+    layers.append(nn.ReLU())
+    if input_dropout is not None:
+        layers.append(nn.Dropout(p=input_dropout))
 
     for _ in range(num_layers - 2):
         layers.append(nn.Linear(hidden, hidden))
+        if batch_norm:
+            layers.append(nn.BatchNorm1d(hidden))
         layers.append(nn.ReLU())
         if dropout:
-            layers.append(nn.Dropout())
+            layers.append(nn.Dropout(p=dropout))
 
     layers.append(nn.Linear(hidden, out_features))
 

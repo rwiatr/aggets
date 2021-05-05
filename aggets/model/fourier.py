@@ -95,11 +95,69 @@ class HistogramBlock(nn.Module):
         return x
 
 
+class Generic1DEncoder:
+
+    def __init__(self, size_first=False):
+        self.mesh = None
+        self.size_first = size_first
+        self.x_last_shape = None
+
+    def encode(self, x):
+        if self.size_first:
+            """
+                input = [batch, size, [id dims], time]
+            """
+            pass
+        else:
+            """
+                input = [batch, time, [id dims], size]
+            """
+            x = x.transpose(1, -1)
+        d = [*x.shape[:-1], len(x.shape) - 3]
+        z = torch.zeros(d)
+        x = torch.cat([x, z], dim=-1)
+        dims = len(x.shape)
+
+        if self.mesh is None:
+            self.mesh = []
+            for mesh_dim in range(3 - 1, dims - 1):
+                mesh_dim_size = x.shape[mesh_dim]
+                d = np.linspace(0, 2 * np.pi, mesh_dim_size)
+                d = d.reshape([mesh_dim_size if k == mesh_dim else 1 for k in range(dims)])
+                d = torch.tensor(d, dtype=float)
+                self.mesh.append(d)
+                print(f'd-{mesh_dim}-shape', d.shape)
+        for mesh_dim in range(0, dims - 3):
+            coords = [slice(0, size) for size in x.shape[:-1]]
+            coords.append(slice(x.shape[-1] - mesh_dim - 1, x.shape[-1] - mesh_dim))
+            x[coords] = self.mesh[mesh_dim]
+
+        x = torch.transpose(x, 1, -2)
+        self.x_last_shape = x.shape
+        x = torch.flatten(x, start_dim=0, end_dim=-3)
+        """
+            output = [batch * [id dims], size, time]
+        """
+        return x
+
+    def decode(self, x, last_dim=1):
+        """
+            input = [batch * [id dims], size, time]
+        """
+        x = x.reshape([*self.x_last_shape[:-1], last_dim])
+        x = torch.transpose(x, 1, -2)
+        if self.size_first:
+            pass
+        else:
+            x = x.transpose(1, -1)
+        return x
+
+
 class HistogramEncoder:
     def __init__(self, size, hists, types, t_in):
-        self.grid = torch.tensor(np.linspace(0, 2 * np.pi, size).reshape(1, size, 1), dtype=torch.float)
-        self.hist_id = torch.tensor(np.linspace(0, 2 * np.pi, hists).reshape(hists, 1, 1), dtype=torch.float)
-        self.type_id = torch.tensor(np.linspace(0, 2 * np.pi, types).reshape(1, 1, types), dtype=torch.float)
+        self.grid = torch.tensor(np.linspace(0, 2 * np.pi, size).reshape((1, size, 1)), dtype=torch.float)
+        self.hist_id = torch.tensor(np.linspace(0, 2 * np.pi, hists).reshape((hists, 1, 1)), dtype=torch.float)
+        self.type_id = torch.tensor(np.linspace(0, 2 * np.pi, types).reshape((1, 1, types)), dtype=torch.float)
         self.size = size
         self.hists = hists
         self.types = types
@@ -152,10 +210,11 @@ class MultiHistogramBlock(nn.Module):
 
 
 class HistogramLerner(nn.Module):
-    def __init__(self, size, hists, types, t_in):
+    def __init__(self, extra_dims, t_in):
         super(HistogramLerner, self).__init__()
-        self.encoder = HistogramEncoder(size, hists, types, t_in)
-        self.multi_block = MultiHistogramBlock(3, 64, 4, self.encoder.t_out)
+        self.encoder = Generic1DEncoder(size_first=False)
+        # self.encoder = HistogramEncoder(size, hists, types, t_in)
+        self.multi_block = MultiHistogramBlock(3, 64, 4, t_in + extra_dims)
 
     def forward(self, x):
         # x, _ = x
@@ -217,17 +276,36 @@ class FAdapter2(nn.Module):
 
     def forward(self, X):
         ts = X
-
         """
-        ts = [batch, seq, hist_id, hist_type, features]
+        ts = [batch, seq, hist_type, hist_id, features]
         lerner:
         input = [batch, size, hist_id, hist_type, t_in]
         output = [batch * hist_id * hist_type, size, t_in + (pos, id, type)]
         """
-        # print(ts.shape)
-        ts = torch.transpose(ts, 1, -1)
+        # ts = torch.transpose(ts, 2, 3)
+        # ts = torch.unsqueeze(ts, 2)
+
+        # ts = torch.transpose(ts, 1, -1)
         ts = self.learner(ts)
-        ts = torch.transpose(ts, 1, -1)
-        # ts = ts[:, :, :, 0, 0]
-        # print(ts.shape)
+        return ts.reshape(ts.shape[0], 1, ts.shape[1])
+
+
+class FAdapter3(nn.Module):
+    def __init__(self, learner):
+        super(FAdapter3, self).__init__()
+        self.learner = learner
+
+    def forward(self, X):
+        ts = X
+        """
+        ts = [batch, seq, hist_type, hist_id, features]
+        lerner:
+        input = [batch, size, hist_id, hist_type, t_in]
+        output = [batch * hist_id * hist_type, size, t_in + (pos, id, type)]
+        """
+        # ts = torch.transpose(ts, 2, 3)
+        # ts = torch.unsqueeze(ts, 2)
+
+        # ts = torch.transpose(ts, 1, -1)
+        ts = self.learner(ts)
         return ts

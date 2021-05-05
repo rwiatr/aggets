@@ -31,7 +31,7 @@ class DummyNet(nn.Module):
 
     def forward(self, x):
         x, lr = x
-        return lr[:, -1]
+        return lr[:, -1:]
 
 
 class DummyNetTS(nn.Module):

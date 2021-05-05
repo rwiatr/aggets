@@ -223,14 +223,16 @@ def train_lr_decay(model, window, handler=None, criterion=None, patience=5, vali
 
 
 def train_window_models(models, wg, criterion=None, patience=5, validate=True, lrs=[0.001, 0.0001, 0.00001],
-                        weight_decay=0, max_epochs=100, target='lr', source='all', log='full'):
+                        weight_decay=0, max_epochs=100, target='lr', source='all', log='full',
+                        target_current_frame=False):
     original = wg
     for model in models:
         if hasattr(wg, 'configure'):
             wg = original
             wg.configure(model.window_config)
         else:
-            wg = original.wrapped(model.window_config, {'target': target, 'source': source})
+            wg = original.wrapped(model.window_config, {'target': target, 'source': source,
+                                                        'y_offset': 0 if not target_current_frame else -1})
         print(f'training model {model.name}')
         handler = train_lr_decay(model, wg, criterion=criterion, patience=patience, validate=validate, lrs=lrs,
                                  weight_decay=weight_decay, max_epochs=max_epochs, log=log)

@@ -45,6 +45,7 @@ class SimpleDataLoaderFactory:
                 models_in = models[sample, start:middle]
                 aggregates_out = aggregates[sample, middle + y_offset:end + y_offset]
                 models_out = models[sample, middle + y_offset:end + y_offset]
+
                 if target == 'lr':
                     output = models_out
                 elif target == 'agg[0]':
