@@ -1,9 +1,10 @@
-import torch
-import torch.optim as optim
-import torch.nn as nn
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from aggets.util import data_to_device
 
 
 class FitLoop:
@@ -14,6 +15,8 @@ class FitLoop:
         self.optimizer = optimizer
         self.log_every = log_every
         self.log = log
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 
     def fit(self, train_loader, validation_loader=None, optimize=True):
         if validation_loader is None:
@@ -22,10 +25,13 @@ class FitLoop:
 
         batch_num = 0
         val_losses = self.validate(validation_loader)
+        self.net.train()
+
         while not self.stop.is_stop():
             train_losses = []
 
             for batch_id, (X, y) in enumerate(train_loader()):
+                X, y = data_to_device(X, self.device), data_to_device(y, self.device)
                 outputs = self.net(X)
                 if optimize:
                     self.optimizer.zero_grad()
@@ -69,6 +75,7 @@ class FitLoop:
         self.net.eval()
         with torch.no_grad():
             for batch_id, (X, y) in enumerate(validation_loader()):
+                X, y = data_to_device(X, self.device), data_to_device(y, self.device)
                 outputs = self.net(X)
                 loss = self.criterion(outputs, y)
                 val_losses.append(loss.item())
@@ -159,9 +166,11 @@ class ModelHandler:
 def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
                        max_epochs=100, patience=1000, log_every=1000, weight_decay=0, path='model.bin', validate=True,
                        train_loss_mul=1, optimize=True, log=True):
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loop = FitLoop(
         stop=stop,
         net=model,
