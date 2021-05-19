@@ -1,11 +1,11 @@
 import pandas as pd
 
 
-def load():
+def load(path='data/ts/hyperplane'):
     """
     class is the label [0,1]
     """
-    df = pd.read_csv('data/ts/hyperplane/hyper_f.csv').astype('float32')
+    df = pd.read_csv(f'{path}/hyper_f.csv').astype('float32')
 
     n = len(df)
     train_df = df[0:int(n * 0.7)]
@@ -20,11 +20,11 @@ def load():
             'column_indices': column_indices}
 
 
-def load_discrete(bins=10):
+def load_discrete(bins=10, path='data/ts/hyperplane'):
     """
     class is the label [0,1]
     """
-    df = pd.read_csv('data/ts/hyperplane/hyper_f.csv').astype('float32')
+    df = pd.read_csv(f'{path}/hyper_f.csv').astype('float32')
     atts = [column for column in df.columns if column != 'class']
     discrete = df.copy()
     for att in atts:

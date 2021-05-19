@@ -13,9 +13,10 @@ setup(
 
     package_dir={'': 'src'},
     packages=find_packages(where='src'),  # Required
-    python_requires='=3.8',
+    python_requires='=3.6',
 
-    install_requires=['numpy', 'pandas', 'scikit-learn', 'scikit-plot', 'pytorch'],
+    install_requires=['numpy', 'pandas', 'scikit-learn', 'futures', 'matplotlib', 'torch==1.6.0'],
+    # conda install pytorch==1.6.0 torchvision==0.7.0 -c pytorch
     tests_require=['pytest'],
     # extras_require={
     #     'dev': [],
