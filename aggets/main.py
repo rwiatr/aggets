@@ -32,14 +32,14 @@ if __name__ == '__main__':
         # HIST+LR -> LR
         inp = nn.Sequential(
             agg_m.FlatCat(),
-            simple.mlp(features=2261, num_layers=1, out_features=hidden)
+            simple.mlp(features=411, num_layers=1, out_features=hidden)
         )
         out = simple.mlp(features=hidden, num_layers=2, out_features=11)
 
         lstm = agg_m.AutoregLstm(input=inp, output=out, in_len=10, out_len=5, hidden=hidden, num_layers=num_layers)
         # -------
         lstm.name = 'autoreg-lstm'
-        train.train_window_models([lstm], w, patience=10, validate=True, weight_decay=0, max_epochs=1000,
+        train.train_window_models([lstm], w, patience=10, validate=True, weight_decay=0, max_epochs=1,
                                   lrs=[0.0001, 0.00001],
                                   source='all', target='lr', log=False)
         # -------
@@ -50,11 +50,11 @@ if __name__ == '__main__':
 
     def fourier_hist0_to_hist0(w):
         frr = fourier.HistogramLerner(extra_dims=1, t_in=10)
-        frr = fourier.FAdapter2(frr)
+        frr = fourier.FAdapter3(frr)
         frr.window_config = WindowConfig(output_sequence_length=1, input_sequence_length=10, label_stride=1)
         # -------
         frr.name = 'fourier'
-        train.train_window_models([frr], w, patience=2, validate=True, weight_decay=0, max_epochs=10,
+        train.train_window_models([frr], w, patience=2, validate=True, weight_decay=0, max_epochs=1,
                                   lrs=[0.001, 0.0001],
                                   source='agg[0]', target='agg[0]', log=False)
 
@@ -65,5 +65,5 @@ if __name__ == '__main__':
 
 
     w = load_data()
-    lstm_all_to_lr(w, num_layers=1, hidden=256)
+    # lstm_all_to_lr(w, num_layers=1, hidden=256)
     fourier_hist0_to_hist0(w)

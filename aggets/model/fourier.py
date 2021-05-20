@@ -287,6 +287,7 @@ class FAdapter2(nn.Module):
 
         # ts = torch.transpose(ts, 1, -1)
         ts = self.learner(ts)
+        print(ts.shape)
         return ts.reshape(ts.shape[0], 1, ts.shape[1])
 
 
