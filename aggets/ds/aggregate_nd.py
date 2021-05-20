@@ -62,7 +62,7 @@ class WindowGenerator:
     def test(self, in_len, out_len, other={}):
         return self.dataloader_factory.data_loader(self.test_agges, self.test_models, in_len, out_len, **other)
 
-    def plot_lr(self, d_types=['train', 'val', 'test'], offsets=[0, 1, 20], axs=None, rolling_frac=0.05):
+    def plot_lr(self, d_types=['train', 'val', 'test'], offsets=[1, 5, 20], axs=None, rolling_frac=0.05):
         return PlotLrsVsData(train_lrs=self.train_models[:, 0],
                              val_lrs=self.val_models[:, 0],
                              test_lrs=self.test_models[:, 0],
