@@ -46,6 +46,7 @@ if __name__ == '__main__':
         _, axs = plt.subplots(ncols=3, nrows=1, sharey='row', figsize=(15, 3))
         w.plot_lr(axs=axs)
         w.plot_model(lstm, axs=axs, other={'source': 'all', 'target': 'lr'})
+        plt.show()
 
 
     def fourier_hist0_to_hist0(w):
@@ -62,8 +63,9 @@ if __name__ == '__main__':
         _, axs = plt.subplots(ncols=3, nrows=1, sharey='row', figsize=(15, 3))
         w.plot_agg_dist(axs=axs, select=lambda a: a[:, 0, 0])
         w.plot_model_agg_dist(model=frr, axs=axs, other={'source': 'agg[0]', 'target': 'agg[0]'})
+        plt.show()
 
 
     w = load_data()
-    # lstm_all_to_lr(w, num_layers=1, hidden=256)
+    lstm_all_to_lr(w, num_layers=1, hidden=256)
     fourier_hist0_to_hist0(w)
