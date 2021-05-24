@@ -190,6 +190,8 @@ def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_los
 def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
                 max_epochs=100, patience=1000, log_every=1000, weight_decay=0, path='model.bin',
                 optimize=True):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
