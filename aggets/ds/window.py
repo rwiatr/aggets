@@ -111,7 +111,7 @@ class WindowGenerator:
                                    stride=1,
                                    sequence_length=self.total_window_size,
                                    shuffle=True,
-                                   batch_size=32)
+                                   batch_size=1024)
         return map(self.split_window, ds)
 
     @property

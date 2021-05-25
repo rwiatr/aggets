@@ -261,7 +261,7 @@ class WindowGenerator:
                                   out_len=out_len,
                                   with_reverse=with_reverse), a_size, lr_size
 
-    def data_loader(self, agg, lrs, is_train=False, shuffle=True, batch_size=32):
+    def data_loader(self, agg, lrs, is_train=False, shuffle=True, batch_size=1024):
         in_len = self.input_sequence_length
         out_len = self.output_sequence_length
         with_reverse = self.reverse_train and is_train
