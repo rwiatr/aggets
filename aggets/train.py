@@ -11,6 +11,7 @@ from aggets.util import cuda_if_possible
 if torch.cuda.is_available():
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
+import time
 
 class FitLoop:
     def __init__(self, stop, criterion, net, optimizer, log_every=100, log=True):
@@ -29,12 +30,12 @@ class FitLoop:
         batch_num = 0
         val_losses = self.validate(validation_loader)
         self.net.train()
-
         global_start = time.time()
         batch_size = 32  # hardcoded
 
         while not self.stop.is_stop():
             train_losses = []
+
             start = time.time()
             for batch_id, (X, y) in enumerate(train_loader()):
                 outputs = self.net(X)
@@ -64,9 +65,8 @@ class FitLoop:
                                       np.mean(np.abs(train_losses)),
                                       np.mean(np.abs(val_losses))))
                 batch_num += 1
-
             end = time.time()
-            sps = batch_num * batch_size / (end - start)
+            sps = batch_size * batch_num / (end - start)
             print(f'Epoch finished| Samples/sec: {sps:.2f}')
 
             val_losses = self.validate(validation_loader)
