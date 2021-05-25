@@ -1,3 +1,5 @@
+import time
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -25,9 +27,12 @@ class FitLoop:
         val_losses = self.validate(validation_loader)
         self.net.train()
 
+        global_start = time.time()
+        batch_size = 32  # hardcoded
+
         while not self.stop.is_stop():
             train_losses = []
-
+            start = time.time()
             for batch_id, (X, y) in enumerate(train_loader()):
                 outputs = self.net(X)
                 if optimize:
@@ -42,6 +47,9 @@ class FitLoop:
 
                 if ((batch_num + 1) % self.log_every) == 0:
                     if self.log:
+                        end = time.time()
+                        sps = (batch_num + 1) * batch_size / (end - start)
+                        print(f'Batch [{batch_num + 1}]| Samples/sec: {sps:.2f}')
                         print('{}epoch {} batch {} loss={:.3}, '
                               'MTL={:.3}, '
                               'MVL={:.3}'
@@ -54,8 +62,11 @@ class FitLoop:
                                       np.mean(np.abs(val_losses))))
                 batch_num += 1
 
-            val_losses = self.validate(validation_loader)
+            end = time.time()
+            sps = batch_num * batch_size / (end - start)
+            print(f'Epoch finished| Samples/sec: {sps:.2f}')
 
+            val_losses = self.validate(validation_loader)
             self.net.train()
             self.stop.update_epoch_loss(validation_loss=np.mean(np.abs(val_losses)),
                                         train_loss=np.mean(np.abs(train_losses)))
@@ -63,6 +74,10 @@ class FitLoop:
             if self.stop.is_best():
                 print(f'saving model MTL={np.mean(np.abs(train_losses))}, MVL={np.mean(np.abs(val_losses))}')
                 self.stop.handler.save(mtype='best')
+
+        global_end = time.time()
+        sps = batch_num * batch_size / (global_end - global_start)
+        print(f'Training finished| Samples/sec: {sps:.2f}')
 
         self.stop.handler.save(mtype='last')
         self.net.eval()
@@ -157,7 +172,7 @@ class ModelImprovementStop:
     def is_stop(self):
         # if len(self.model_diff) == 0:
         #     return False
-        return (self.epoch >= self.max_epochs) #| (self.max_improvement < self.model_diff[-1])
+        return (self.epoch >= self.max_epochs)  # | (self.max_improvement < self.model_diff[-1])
 
     def plot_loss(self, plot_train_loss=False, moving_avg=100, train_loss_mul=1):
         if moving_avg:
@@ -230,8 +245,7 @@ def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_los
         criterion=criterion,
         optimizer=optimizer,
         log_every=log_every,
-        log=log,
-        device=device
+        log=log
     )
 
     loop.fit(lambda: window.train, (lambda: window.val) if validate else None, optimize=optimize)
