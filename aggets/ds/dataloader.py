@@ -9,7 +9,7 @@ class SimpleDataLoaderFactory:
         self.debug = debug
 
     def data_loader(self, aggregates, models, in_len, out_len, target='lr', source='all', agg='full',
-                    y_offset=0, shuffle=True, batch_size=32, first_sample=False):
+                    y_offset=0, shuffle=True, batch_size=1024, first_sample=False):
         """
             aggregates: [window, sample, ???]
             models: [window, sample, ???]
@@ -205,7 +205,7 @@ class BasicDataLoaderCreator:
                                   out_len=out_len,
                                   with_reverse=with_reverse), a_size, lr_size
 
-    def data_loader(self, agg, lrs, is_train=False, shuffle=True, batch_size=32):
+    def data_loader(self, agg, lrs, is_train=False, shuffle=True, batch_size=1024):
         dataset, a_size, lr_size = self.to_dataset(agg, in_len, lrs, out_len, with_reverse)
 
         dl = data.DataLoader(dataset, shuffle=shuffle, batch_size=batch_size)
