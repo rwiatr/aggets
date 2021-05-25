@@ -1,5 +1,9 @@
 import os
 import torch.nn as nn
+
+import sys
+sys.path.append("..")
+
 import aggets.train as train
 import aggets.ds.aggregate_nd as agg_nd
 import aggets.util as util

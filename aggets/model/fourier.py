@@ -1,5 +1,9 @@
 from functools import partial
 import torch
+
+if torch.cuda.is_available():
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 import torch.nn as nn
 import torch.nn.functional as F
 from aggets.model import simple
