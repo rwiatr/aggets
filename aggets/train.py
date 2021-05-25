@@ -8,6 +8,9 @@ import torch.nn as nn
 import torch.optim as optim
 from aggets.util import cuda_if_possible
 
+if torch.cuda.is_available():
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
 
 class FitLoop:
     def __init__(self, stop, criterion, net, optimizer, log_every=100, log=True):
@@ -283,6 +286,8 @@ def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, m
                 optimize=True, device=cuda_if_possible()):
     if device is not None:
         model.to(device)
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
