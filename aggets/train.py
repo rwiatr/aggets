@@ -125,6 +125,57 @@ class EarlyStop:
         plt.legend()
 
 
+class ModelImprovementStop:
+    def __init__(self, handler, max_improvement, max_epochs=None):
+        self.best_loss = np.inf
+        self.epoch = 0
+        self.train_losses = []
+        self.val_losses = []
+        self.model_diff = []
+        self.max_epochs = max_epochs if max_epochs is not None else np.inf
+        self.handler = handler
+        self.reference_model = None
+        self.max_improvement = max_improvement
+
+    def update_epoch_loss(self, train_loss, validation_loss):
+        self.handler.update_epoch_loss(validation_loss)
+        self.train_losses.append(train_loss)
+        self.val_losses.append(validation_loss)
+        self.epoch += 1
+
+        if self.reference_model is not None:
+            self.model_diff.append(torch.sum((self.reference_model - self.handler.model) ** 2))
+        # if self.max_improvement < np.inf:
+        #     self.reference_model = self.handler.model.copy()
+
+    def is_best(self):
+        return True
+
+    def is_stop(self):
+        # if len(self.model_diff) == 0:
+        #     return False
+        return (self.epoch >= self.max_epochs) #| (self.max_improvement < self.model_diff[-1])
+
+    def plot_loss(self, plot_train_loss=False, moving_avg=100, train_loss_mul=1):
+        if moving_avg:
+            mvn_avg = len(self.val_losses) // moving_avg
+            plt.plot(pd.Series(self.val_losses).rolling(max(mvn_avg, 1), center=True).mean(), label='Validation')
+        else:
+            plt.plot(self.val_losses, label='Validation')
+        if plot_train_loss:
+            if moving_avg:
+                mvn_avg = len(self.val_losses) // moving_avg
+                plt.plot(pd.Series(np.array(self.train_losses) * train_loss_mul).rolling(max(mvn_avg, 1),
+                                                                                         center=True).mean(),
+                         label='Train' if train_loss_mul == 1 else f'Train x{train_loss_mul}')
+            else:
+                plt.plot(np.array(self.train_losses) * train_loss_mul,
+                         label='Train' if train_loss_mul == 1 else f'Train x{train_loss_mul}')
+        plt.title('Loss during training')
+        plt.xlabel('epoch')
+        plt.legend()
+
+
 class ModelHandler:
 
     def __init__(self, model, path):
@@ -133,19 +184,25 @@ class ModelHandler:
         self.best_loss = np.inf
         self.success_updates = 0
 
+    def reset(self):
+        self.best_loss = np.inf
+        self.success_updates = 0
+
     def best(self, path=None):
         path = path if path else self.path
-        self.model.load_state_dict(torch.load(path + '.best.bin'))
+        if path is not None:
+            self.model.load_state_dict(torch.load(path + '.best.bin'))
 
     def last(self, path=None):
         path = path if path else self.path
-        self.model.load_state_dict(torch.load(path + '.last.bin'))
+        if path is not None:
+            self.model.load_state_dict(torch.load(path + '.last.bin'))
 
     def save(self, path=None, mtype='last'):
         path = path if path else self.path
-        model_path = path + '.' + mtype + '.bin'
-
-        torch.save(self.model.state_dict(), model_path)
+        if path is not None:
+            model_path = path + '.' + mtype + '.bin'
+            torch.save(self.model.state_dict(), model_path)
 
     def update_epoch_loss(self, loss):
         if loss >= self.best_loss:
@@ -176,6 +233,29 @@ def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_los
         stop.plot_loss(plot_train_loss=True, train_loss_mul=train_loss_mul)
 
     return handler
+
+
+def train_imaml_window_model(model, window, criterion, max_improvement, lr=0.001, plot_loss=True,
+                             max_epochs=100, log_every=1000, weight_decay=0,
+                             validate=True, train_loss_mul=1, optimize=True, log=True):
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    handler = ModelHandler(model=model, path=None)
+    stop = ModelImprovementStop(max_improvement=max_improvement, max_epochs=max_epochs, handler=handler)
+
+    loop = FitLoop(
+        stop=stop,
+        net=model,
+        criterion=criterion,
+        optimizer=optimizer,
+        log_every=log_every,
+        log=log
+    )
+
+    loop.fit(lambda: window.train, (lambda: window.val) if validate else None, optimize=optimize)
+    if plot_loss and log:
+        stop.plot_loss(plot_train_loss=True, train_loss_mul=train_loss_mul)
+
+    return handler, optimizer
 
 
 def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
