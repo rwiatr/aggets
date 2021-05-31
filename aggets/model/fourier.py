@@ -1,15 +1,14 @@
 from functools import partial
 import torch
 
-if torch.cuda.is_available():
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
 import torch.nn as nn
 import torch.nn.functional as F
 from aggets.model import simple
 
 from aggets.model.aggregate import WindowConfig
 import numpy as np
+
+from aggets.util import cuda_if_possible
 
 """ based on https://github.com/zongyi-li/fourier_neural_operator/blob/master/fourier_1d.py"""
 
@@ -101,11 +100,11 @@ class HistogramBlock(nn.Module):
 
 class Generic1DEncoder:
 
-    def __init__(self, size_first=False):
+    def __init__(self, size_first=False, device=cuda_if_possible()):
         self.mesh = None
         self.size_first = size_first
         self.x_last_shape = None
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
 
     def encode(self, x):
         if self.size_first:

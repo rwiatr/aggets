@@ -6,10 +6,8 @@ import torch.nn as nn
 import torch.optim as optim
 from aggets.util import cuda_if_possible
 
-if torch.cuda.is_available():
-    torch.set_default_tensor_type('torch.cuda.FloatTensor')
-
 import time
+
 
 class FitLoop:
     def __init__(self, stop, criterion, net, optimizer, log_every=100, log=True):
