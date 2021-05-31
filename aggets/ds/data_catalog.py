@@ -73,6 +73,91 @@ class Binary:
         return self._load(file, set_name)
 
 
+
+class Binary_pp:
+    def __init__(self, path='/tmp/ds'):
+        self.path = path
+
+    def _load(self, file, set_name, zipped=False):
+        df = pd.read_csv(file)
+        print(file, df.shape, df.columns)
+        n = len(df)
+        train_df = df[0:int(n * 0.7)]
+        val_df = df[int(n * 0.7):int(n * 0.9)]
+        test_df = df[int(n * 0.9):]
+
+        num_features = df.shape[1]
+        column_indices = {name: i for i, name in enumerate(df.columns)}
+
+        return {'train': train_df, 'val': val_df, 'df': df,
+                'test': test_df, 'features': num_features,
+                'column_indices': column_indices}
+
+    def covtype(self):
+        set_name = 'covtype.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def fin_adult(self):
+        set_name = 'first_fin_adult.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def fin_bank(self):
+        set_name = 'first_fin_bank.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def fin_digits(self):
+        set_name = 'first_fin_digits08.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def fin_digits_bis(self):
+        set_name = 'first_fin_digits17.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def fin_musk(self):
+        set_name = 'first_fin_musk.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def fin_phis(self):
+        set_name = 'first_fin_phis.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+    
+    def fin_wine(self):
+        set_name = 'first_fin_wine.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def nsl(self):
+        set_name = 'nsl.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def nsl_kdd(self):
+        set_name = 'nsl_kdd.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def phishing(self):
+        set_name = 'phishing.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def spam(self):
+        set_name = 'spam.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
+    def spamassassian(self):
+        set_name = 'spamassassian.csv'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name)
+
 if __name__ == '__main__':
     binary = Binary()
     # binary.agr_a()
