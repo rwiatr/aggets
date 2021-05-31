@@ -1,4 +1,6 @@
 import pickle
+import torch
+
 
 def save(wg, path='file.bin'):
     with open(path, 'wb') as handle:
@@ -11,9 +13,5 @@ def load(path='file.bin'):
     return wg
 
 
-def data_to_device(data, device):
-    if isinstance(data, list):
-        data = [x.to(device) for x in data]
-    else:
-        data = data.to(device)
-    return data
+def cuda_if_possible():
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")

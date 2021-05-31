@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from aggets.util import data_to_device
+from aggets.util import cuda_if_possible
 
 
 class FitLoop:
@@ -15,8 +15,6 @@ class FitLoop:
         self.optimizer = optimizer
         self.log_every = log_every
         self.log = log
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
     def fit(self, train_loader, validation_loader=None, optimize=True):
         if validation_loader is None:
@@ -31,7 +29,6 @@ class FitLoop:
             train_losses = []
 
             for batch_id, (X, y) in enumerate(train_loader()):
-                X, y = data_to_device(X, self.device), data_to_device(y, self.device)
                 outputs = self.net(X)
                 if optimize:
                     self.optimizer.zero_grad()
@@ -75,7 +72,6 @@ class FitLoop:
         self.net.eval()
         with torch.no_grad():
             for batch_id, (X, y) in enumerate(validation_loader()):
-                X, y = data_to_device(X, self.device), data_to_device(y, self.device)
                 outputs = self.net(X)
                 loss = self.criterion(outputs, y)
                 val_losses.append(loss.item())
@@ -165,9 +161,9 @@ class ModelHandler:
 
 def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
                        max_epochs=100, patience=1000, log_every=1000, weight_decay=0, path='model.bin', validate=True,
-                       train_loss_mul=1, optimize=True, log=True):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+                       train_loss_mul=1, optimize=True, log=True, device=cuda_if_possible()):
+    if device is not None:
+        model.to(device)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -177,7 +173,8 @@ def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_los
         criterion=criterion,
         optimizer=optimizer,
         log_every=log_every,
-        log=log
+        log=log,
+        device=device
     )
 
     loop.fit(lambda: window.train, (lambda: window.val) if validate else None, optimize=optimize)
@@ -189,9 +186,9 @@ def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_los
 
 def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
                 max_epochs=100, patience=1000, log_every=1000, weight_decay=0, path='model.bin',
-                optimize=True):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+                optimize=True, device=cuda_if_possible()):
+    if device is not None:
+        model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)

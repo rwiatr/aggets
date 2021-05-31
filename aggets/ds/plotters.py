@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from aggets.util import data_to_device
 
 def to_score(models, dfs, offset=0, rolling_frac=0.05):
     scores = []
@@ -94,7 +93,6 @@ class PlotMetaModelVsData:
         self.test_df = test_df
 
         self.select = select
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
     def plot(self, model, offsets, d_types=['train', 'val', 'test'], axs=None, rolling_frac=0.05):
@@ -112,7 +110,6 @@ class PlotMetaModelVsData:
             plt.legend()
 
     def _model_to_lrs(self, model, Xs):
-        Xs = data_to_device(Xs, self.device)
         lrs = []
         meta = self.select(model(Xs))[:, 0]  # take only first model predicted
         for m in meta:
@@ -168,15 +165,12 @@ class PlotMetaModelDist:
         self.val_Xs_in, self.val_Xs_out = val_Xs
         self.test_Xs_in, self.test_Xs_out = test_Xs
         self.select = select
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
     def plot(self, model, offsets, dist_fn=None, d_types=['train', 'val', 'test'], axs=None, rolling_frac=0.05):
         if dist_fn == None:
             dist_fn = lambda v0, v1: torch.sqrt(torch.sum((v0 - v1) ** 2))
         for idx, d_type in enumerate(d_types):
             _in, out = self._select_set(d_type)
-            _in, out = data_to_device(_in, self.device), data_to_device(out, self.device)
             _eval = model(_in)
             # scale down by the output length
             score = apply_to_dist(self.select(_eval), self.select(out), dist_fn=dist_fn,
