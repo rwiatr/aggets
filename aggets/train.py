@@ -1,5 +1,3 @@
-import time
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -7,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from aggets.util import cuda_if_possible
+
+import time
 
 
 class FitLoop:
@@ -26,14 +26,15 @@ class FitLoop:
         batch_num = 0
         val_losses = self.validate(validation_loader)
         self.net.train()
-
         global_start = time.time()
-        batch_size = 32  # hardcoded
+        processed_items = 0
 
         while not self.stop.is_stop():
             train_losses = []
+
             start = time.time()
             for batch_id, (X, y) in enumerate(train_loader()):
+                processed_items += X[0].shape[0] if type(X) is tuple or type(X) is list else X.shape[0]
                 outputs = self.net(X)
                 if optimize:
                     self.optimizer.zero_grad()
@@ -48,7 +49,7 @@ class FitLoop:
                 if ((batch_num + 1) % self.log_every) == 0:
                     if self.log:
                         end = time.time()
-                        sps = (batch_num + 1) * batch_size / (end - start)
+                        sps = processed_items / (end - start)
                         print(f'Batch [{batch_num + 1}]| Samples/sec: {sps:.2f}')
                         print('{}epoch {} batch {} loss={:.3}, '
                               'MTL={:.3}, '
@@ -61,9 +62,8 @@ class FitLoop:
                                       np.mean(np.abs(train_losses)),
                                       np.mean(np.abs(val_losses))))
                 batch_num += 1
-
             end = time.time()
-            sps = batch_num * batch_size / (end - start)
+            sps = processed_items / (end - start)
             print(f'Epoch finished| Samples/sec: {sps:.2f}')
 
             val_losses = self.validate(validation_loader)
@@ -76,7 +76,7 @@ class FitLoop:
                 self.stop.handler.save(mtype='best')
 
         global_end = time.time()
-        sps = batch_num * batch_size / (global_end - global_start)
+        sps = processed_items / (global_end - global_start)
         print(f'Training finished| Samples/sec: {sps:.2f}')
 
         self.stop.handler.save(mtype='last')
@@ -197,7 +197,7 @@ class ModelImprovementStop:
 class ModelHandler:
 
     def __init__(self, model, path):
-        self.model = model
+        self.model = nn.DataParallel(model)
         self.path = path
         self.best_loss = np.inf
         self.success_updates = 0
@@ -283,6 +283,8 @@ def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, m
                 optimize=True, device=cuda_if_possible()):
     if device is not None:
         model.to(device)
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
