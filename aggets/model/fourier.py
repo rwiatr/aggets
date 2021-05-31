@@ -101,6 +101,7 @@ class Generic1DEncoder:
         self.mesh = None
         self.size_first = size_first
         self.x_last_shape = None
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def encode(self, x):
         if self.size_first:
@@ -114,7 +115,7 @@ class Generic1DEncoder:
             """
             x = x.transpose(1, -1)
         d = [*x.shape[:-1], len(x.shape) - 3]
-        z = torch.zeros(d)
+        z = torch.zeros(d, device=self.device)
         x = torch.cat([x, z], dim=-1)
         dims = len(x.shape)
 
