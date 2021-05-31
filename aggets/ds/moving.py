@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import scikitplot as skplt
 from sklearn import metrics
 
+from aggets.ds.dataloader import DEFAULT_BATCH
+
 """
 based on https://www.tensorflow.org/tutorials/structured_data/time_series
 """
@@ -155,7 +157,7 @@ class DataSet:
                 y_probas = model(data_set)
                 skplt.metrics.plot_roc(y_probas, data_set[self.label_columns], title=title)
 
-    def make_dataset(self, df, shuffle=True, batch_size=1024):
+    def make_dataset(self, df, shuffle=True, batch_size=DEFAULT_BATCH):
         if self.sampling is not None:
             df = df.sample(frac=self.sampling)
         loader = data.DataLoader(df.to_numpy(), shuffle=shuffle, batch_size=batch_size)

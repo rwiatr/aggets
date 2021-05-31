@@ -27,13 +27,14 @@ class FitLoop:
         val_losses = self.validate(validation_loader)
         self.net.train()
         global_start = time.time()
-        batch_size = 32  # hardcoded
+        processed_items = 0
 
         while not self.stop.is_stop():
             train_losses = []
 
             start = time.time()
             for batch_id, (X, y) in enumerate(train_loader()):
+                processed_items += X[0].shape[0] if type(X) is tuple or type(X) is list else X.shape[0]
                 outputs = self.net(X)
                 if optimize:
                     self.optimizer.zero_grad()
@@ -48,7 +49,7 @@ class FitLoop:
                 if ((batch_num + 1) % self.log_every) == 0:
                     if self.log:
                         end = time.time()
-                        sps = (batch_num + 1) * batch_size / (end - start)
+                        sps = processed_items / (end - start)
                         print(f'Batch [{batch_num + 1}]| Samples/sec: {sps:.2f}')
                         print('{}epoch {} batch {} loss={:.3}, '
                               'MTL={:.3}, '
@@ -62,7 +63,7 @@ class FitLoop:
                                       np.mean(np.abs(val_losses))))
                 batch_num += 1
             end = time.time()
-            sps = batch_size * batch_num / (end - start)
+            sps = processed_items / (end - start)
             print(f'Epoch finished| Samples/sec: {sps:.2f}')
 
             val_losses = self.validate(validation_loader)
@@ -75,7 +76,7 @@ class FitLoop:
                 self.stop.handler.save(mtype='best')
 
         global_end = time.time()
-        sps = batch_num * batch_size / (global_end - global_start)
+        sps = processed_items / (global_end - global_start)
         print(f'Training finished| Samples/sec: {sps:.2f}')
 
         self.stop.handler.save(mtype='last')

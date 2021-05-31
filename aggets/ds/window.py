@@ -3,6 +3,8 @@ import torch
 import torch.utils.data as data
 import matplotlib.pyplot as plt
 
+from aggets.ds.dataloader import DEFAULT_BATCH
+
 """
 based on https://www.tensorflow.org/tutorials/structured_data/time_series
 """
@@ -111,7 +113,7 @@ class WindowGenerator:
                                    stride=1,
                                    sequence_length=self.total_window_size,
                                    shuffle=True,
-                                   batch_size=1024)
+                                   batch_size=DEFAULT_BATCH)
         return map(self.split_window, ds)
 
     @property
