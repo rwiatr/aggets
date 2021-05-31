@@ -101,8 +101,7 @@ class WindowGenerator:
                                    train_df=self.train_np_windows,
                                    val_df=self.val_np_windows,
                                    test_df=self.test_np_windows,
-                                   select=select,
-                                   device=self.device) \
+                                   select=select) \
             .plot(model=model,
                   offsets=(model.window_config.input_sequence_length, model.window_config.output_sequence_length),
                   d_types=d_types,
@@ -121,8 +120,7 @@ class WindowGenerator:
         return PlotMetaModelDist(train_Xs=list(wrapped.train)[0],
                                  val_Xs=list(wrapped.val)[0],
                                  test_Xs=list(wrapped.test)[0],
-                                 select=select,
-                                 device=self.device) \
+                                 select=select) \
             .plot(model=model,
                   offsets=(model.window_config.input_sequence_length, model.window_config.output_sequence_length),
                   d_types=d_types,
