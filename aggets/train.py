@@ -1,9 +1,10 @@
-import torch
-import torch.optim as optim
-import torch.nn as nn
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from aggets.util import cuda_if_possible
 
 
 class FitLoop:
@@ -22,6 +23,8 @@ class FitLoop:
 
         batch_num = 0
         val_losses = self.validate(validation_loader)
+        self.net.train()
+
         while not self.stop.is_stop():
             train_losses = []
 
@@ -215,17 +218,20 @@ class ModelHandler:
 
 def train_window_model(model, window, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
                        max_epochs=100, patience=1000, log_every=1000, weight_decay=0, path='model.bin', validate=True,
-                       train_loss_mul=1, optimize=True, log=True):
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+                       train_loss_mul=1, optimize=True, log=True, device=cuda_if_possible()):
+    if device is not None:
+        model.to(device)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     loop = FitLoop(
         stop=stop,
         net=model,
         criterion=criterion,
         optimizer=optimizer,
         log_every=log_every,
-        log=log
+        log=log,
+        device=device
     )
 
     loop.fit(lambda: window.train, (lambda: window.val) if validate else None, optimize=optimize)
@@ -260,7 +266,9 @@ def train_imaml_window_model(model, window, criterion, max_improvement, lr=0.001
 
 def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, model_handler=None,
                 max_epochs=100, patience=1000, log_every=1000, weight_decay=0, path='model.bin',
-                optimize=True):
+                optimize=True, device=cuda_if_possible()):
+    if device is not None:
+        model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)

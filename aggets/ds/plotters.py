@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-
 def to_score(models, dfs, offset=0, rolling_frac=0.05):
     scores = []
     for model, df in zip(models, dfs[offset:]):
@@ -41,8 +40,8 @@ def apply_to_dist(v0s, v1s, offset, dist_fn, rolling_frac=0.05, scale=1):
 
 def to_lr(coefs):
     lr = linear_model.LogisticRegression().fit(np.random.rand(2, coefs.shape[0] - 1), [0, 1])
-    lr.coef_ = coefs[:-1].reshape(1, -1).detach().numpy()
-    lr.intercept_ = coefs[-1].detach().numpy()
+    lr.coef_ = coefs[:-1].reshape(1, -1).cpu().detach().numpy()
+    lr.intercept_ = coefs[-1].cpu().detach().numpy()
     return lr
 
 
@@ -94,6 +93,7 @@ class PlotMetaModelVsData:
         self.test_df = test_df
 
         self.select = select
+
 
     def plot(self, model, offsets, d_types=['train', 'val', 'test'], axs=None, rolling_frac=0.05):
         for idx, d_type in enumerate(d_types):

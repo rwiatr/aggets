@@ -1,9 +1,11 @@
 from aggets.ds.aggregators import AggregatorWrapper, DdAggregator
 from aggets.ds.dataloader import SimpleDataLoaderFactory
 import numpy as np
+import torch
 
 from aggets.ds.lerners import LogisticLerner
 from aggets.ds.plotters import PlotLrsVsData, PlotMetaModelVsData, PlotDist, PlotMetaModelDist
+from aggets.util import cuda_if_possible
 
 
 def as_np(df, val_cols, lab_col):
@@ -30,7 +32,8 @@ def window_generator(train_np, val_np, test_np, hist_bins=5, hist_dim=2,
 
 class WindowGenerator:
     def __init__(self, train_np, val_np, test_np, aggregator, lerner, window_size,
-                 dataloader_factory=SimpleDataLoaderFactory()):
+                 dataloader_factory=SimpleDataLoaderFactory(),
+                 device=cuda_if_possible()):
         self.window_size = window_size
         self.train_np_windows = list(self._to_windows(train_np))
         self.val_np_windows = list(self._to_windows(val_np))
@@ -39,14 +42,15 @@ class WindowGenerator:
         self.aggregator = aggregator
         self.lerner = lerner
         self.dataloader_factory = dataloader_factory
+        self.device = device
 
     def init_structures(self):
-        self.train_agges = self.aggregator.init_aggregates(self.train_np_windows)
-        self.train_models = self.lerner.init_models(self.train_np_windows)
-        self.test_agges = self.aggregator.init_aggregates(self.test_np_windows)
-        self.test_models = self.lerner.init_models(self.test_np_windows)
-        self.val_agges = self.aggregator.init_aggregates(self.val_np_windows)
-        self.val_models = self.lerner.init_models(self.val_np_windows)
+        self.train_agges = self.aggregator.init_aggregates(self.train_np_windows).to(self.device)
+        self.train_models = self.lerner.init_models(self.train_np_windows).to(self.device)
+        self.test_agges = self.aggregator.init_aggregates(self.test_np_windows).to(self.device)
+        self.test_models = self.lerner.init_models(self.test_np_windows).to(self.device)
+        self.val_agges = self.aggregator.init_aggregates(self.val_np_windows).to(self.device)
+        self.val_models = self.lerner.init_models(self.val_np_windows).to(self.device)
 
     def _to_windows(self, arr, skip=0):
         windows = arr.shape[0] // self.window_size
