@@ -79,6 +79,9 @@ class Binary_pp:
         self.path = path
 
     def _load(self, file, set_name, zipped=False):
+        source = f'https://github.com/rlyyah/concept_drift_ds/tree/master/data/{set_name}'
+        if not os.path.isfile(file):
+            wget.download(url=source, out=file)
         df = pd.read_csv(file)
         print(file, df.shape, df.columns)
         n = len(df)
