@@ -29,9 +29,6 @@ class AutoregLstm(nn.Module):
 
     def encode(self, x):
         output, (hidden, cell) = self.enc(x)
-        #print(f'enc shape:{output.shape}')
-        #print(f'hidden shape:{hidden.shape}')
-        # num_layers * num_directions, batch, hidden_size
         return output, hidden, cell
 
     def decode(self, enc_output, hidden, cell):
@@ -40,10 +37,8 @@ class AutoregLstm(nn.Module):
             hidden_reshaped = hidden.repeat(seq_length, 1, 1)
             hidden_permuted = hidden_reshaped.permute(1, 0, 2)
 
-            
             energy = self.tanh(self.attention(torch.cat((hidden_permuted, enc_output), dim=2)))
             attention = self.softmax(energy)
-            # context
             context_vector = torch.bmm(attention.permute(0,2,1), enc_output)
 
             output, (hidden, cell) = self.dec(context_vector, (hidden, cell))
