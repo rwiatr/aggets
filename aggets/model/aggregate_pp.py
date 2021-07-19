@@ -19,32 +19,35 @@ class AutoregLstm(nn.Module):
                            num_layers=num_layers,
                            batch_first=True)
 
-        self.attention = nn.Linear(hidden, 1)
+        self.attention = nn.Linear(hidden*2, 1)
         self.softmax = nn.Softmax(dim=1)
         
         self.relu = nn.ReLU()
+        self.tanh = nn.Tanh()
 
         self.output = output
 
     def encode(self, x):
-        enc, _ = self.enc(x)
-        return enc
+        output, (hidden, cell) = self.enc(x)
+        return output, hidden, cell
 
-    def decode(self, enc):
+    def decode(self, enc_output, hidden, cell):
         for _ in range(self.window_config.output_sequence_length):
-            
-            energy = self.attention(enc)
-            attention = self.softmax(energy)
-            # context
-            enc = torch.bmm(attention.permute(0,2,1), enc)
+            seq_length = enc_output.shape[1]
+            hidden_reshaped = hidden.repeat(seq_length, 1, 1)
+            hidden_permuted = hidden_reshaped.permute(1, 0, 2)
 
-            enc, _ = self.dec(enc)
-            yield enc
+            energy = self.tanh(self.attention(torch.cat((hidden_permuted, enc_output), dim=2)))
+            attention = self.softmax(energy)
+            context_vector = torch.bmm(attention.permute(0,2,1), enc_output)
+
+            output, (hidden, cell) = self.dec(context_vector, (hidden, cell))
+            yield output
 
     def forward(self, x):
         x = self.input.forward(x)
-        x = self.encode(x)
-        x = list(self.decode(x))
+        output, hidden, cell = self.encode(x)
+        x = list(self.decode(output, hidden, cell))
         x = torch.cat(x, dim=1)
         return self.output.forward(x)
 
@@ -73,3 +76,29 @@ class Reshape(nn.Module):
 
     def forward(self, x):
         return x.reshape(*self.shape)
+
+class FlatCatReverse(nn.Module):
+    def __init__(self):
+        super(FlatCatReverse, self).__init__()
+
+    def forward(self, x):
+        hist = x[:, :, :-self.lr_last]
+        lr = x[:, :, -self.lr_last:]
+        hist = hist.reshape(hist.shape[0], hist.shape[1], *self.hist_shape)
+
+        return hist, lr
+
+class FlatCat(nn.Module):
+    def __init__(self):
+        super(FlatCat, self).__init__()
+        self.fcr = FlatCatReverse()
+
+    def forward(self, x):
+        hist, lr = x
+        self.fcr.lr_last = lr.shape[-1]
+        self.fcr.hist_shape = hist.shape[2:]
+        hist = hist.reshape(hist.shape[0], hist.shape[1], -1)
+        return torch.cat([hist, lr], dim=-1)
+
+    def reverse(self):
+        return self.fcr
