@@ -44,7 +44,7 @@ class Imaml:
     def step(self):
         grad_list = []
         for task in self.tasks:
-            task.set_model(model)
+            task.set_model(self.model)
             grad_list.append(task.train())
 
         self.outer_optimizer.zero_grad()
@@ -53,6 +53,11 @@ class Imaml:
         grad = self.mix_grad(grad_list, weight)
         grad_log = self.apply_grad(self.model, grad)
         self.outer_optimizer.step()
+
+    def train_n_plot(self):
+        for task in tasks:
+            task.set_model(self.model)
+            task.model_context.train_with_val(window=task.window)
 
     def plot(self, axs=None):
         for task in self.tasks:
@@ -125,6 +130,16 @@ class ModelContext:
                 if parts == self.max_parts:
                     break
             self.train_losses.append(epoch_loss)
+
+    def train_with_val(self, window):
+        train.train_window_models([self.wrapped], window, patience=4, validate=True, weight_decay=0, max_epochs=100,
+                                  lrs=[0.0001], target_current_frame=True,
+                                  source='agg', target='lr', log=False)
+        # -------
+        _, axs = plt.subplots(ncols=3, figsize=(20, 6))
+        window.plot_lr(axs=axs, offsets=[0])
+        window.plot_model(model=self.wrapped, axs=axs,
+                          other={'y_offset': -1, 'source': 'agg', 'target': 'lr'})
 
     def get_loss(self, data_set_fn):
         loss = torch.Tensor([0])
@@ -328,13 +343,15 @@ if __name__ == '__main__':
         'sea_a': make_window(binary.sea_a(), 'sea_a', window_size=500),
         'sea_g': make_window(binary.sea_g(), 'sea_g', window_size=500),
         'hyper_f': make_window(binary.hyper_f(), 'hyper_f', window_size=500),
+        'hyper_f2': make_window(binary.hyper_f2(), 'hyper_f2', window_size=500),
+
         # 'weather': make_window(binary.weather(), 'weather'),
         # 'electric': make_window(binary.electric(), 'electric')
     }
 
     tasks = []
     model_size = 256
-    model = simple.mlp(features=model_size, num_layers=6, out_features=model_size)
+    model = simple.mlp(features=model_size, num_layers=8, out_features=model_size, dropout=0.5, input_dropout=0.2)
     model.name = 'mlp'
 
     for data_type in data_types:
@@ -348,7 +365,11 @@ if __name__ == '__main__':
     imaml = Imaml(tasks=tasks, model=model)
     fig, axs = plt.subplots(ncols=2, figsize=(12, 6))
 
-    for _ in range(50):
+    imaml.train_n_plot()
+    plt.show()
+    for _ in range(100):
         imaml.step()
     imaml.plot(axs=axs)
+    plt.show()
+    imaml.train_n_plot()
     plt.show()
