@@ -9,13 +9,17 @@ class Binary:
     def __init__(self, path='/tmp/ds'):
         self.path = path
 
-    def _load(self, file, set_name, zipped=False):
+    def _load(self, file, set_name, zipped=False, skip=None):
         source = f'https://github.com/scikit-multiflow/streaming-datasets/raw/master/{set_name}'
         if not os.path.isfile(file):
             wget.download(url=source, out=file)
         df = pd.read_csv(file)
         print(file, df.shape, df.columns)
         n = len(df)
+
+        if skip is not None:
+            df = df[int(n * skip):]
+            n = len(df)
         train_df = df[0:int(n * 0.7)]
         val_df = df[int(n * 0.7):int(n * 0.9)]
         test_df = df[int(n * 0.9):]
@@ -41,6 +45,11 @@ class Binary:
         set_name = 'hyper_f.csv.zip'
         file = f'{self.path}/{set_name}'
         return self._load(file, set_name, zipped=True)
+
+    def hyper_f2(self, skip=0.5):
+        set_name = 'hyper_f.csv.zip'
+        file = f'{self.path}/{set_name}'
+        return self._load(file, set_name, zipped=True, skip=skip)
 
     def airlines(self):
         set_name = 'airlines.csv'

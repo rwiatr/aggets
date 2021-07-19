@@ -27,11 +27,12 @@ class FitLoop:
         val_losses = self.validate(validation_loader)
         self.net.train()
         global_start = time.time()
-        processed_items = 0
 
+        total_processed_items = 0
         while not self.stop.is_stop():
             train_losses = []
 
+            processed_items = 0
             start = time.time()
             for batch_id, (X, y) in enumerate(train_loader()):
                 processed_items += X[0].shape[0] if type(X) is tuple or type(X) is list else X.shape[0]
@@ -64,10 +65,11 @@ class FitLoop:
                 batch_num += 1
             end = time.time()
             sps = processed_items / (end - start)
+            total_processed_items += processed_items
+
             print(f'Epoch finished| Samples/sec: {sps:.2f}')
 
             val_losses = self.validate(validation_loader)
-            self.net.train()
             self.stop.update_epoch_loss(validation_loss=np.mean(np.abs(val_losses)),
                                         train_loss=np.mean(np.abs(train_losses)))
 
@@ -76,7 +78,7 @@ class FitLoop:
                 self.stop.handler.save(mtype='best')
 
         global_end = time.time()
-        sps = processed_items / (global_end - global_start)
+        sps = total_processed_items / (global_end - global_start)
         print(f'Training finished| Samples/sec: {sps:.2f}')
 
         self.stop.handler.save(mtype='last')
@@ -197,7 +199,8 @@ class ModelImprovementStop:
 class ModelHandler:
 
     def __init__(self, model, path):
-        self.model = nn.DataParallel(model)
+        # self.model = nn.DataParallel(model)
+        self.model = model
         self.path = path
         self.best_loss = np.inf
         self.success_updates = 0
@@ -283,8 +286,6 @@ def train_model(model, data, lr=0.001, criterion=nn.MSELoss(), plot_loss=True, m
                 optimize=True, device=cuda_if_possible()):
     if device is not None:
         model.to(device)
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     handler = model_handler if model_handler else ModelHandler(model=model, path=path)
     stop = EarlyStop(patience=patience, max_epochs=max_epochs, handler=handler)
